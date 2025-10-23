@@ -5,11 +5,17 @@ edition = "2024"
 
 [dependencies]
 axum = "0.7"
+axum-extra = { version = "0.9", features = ["cookie"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "time", "sync"] }
 identity_iota = { git = "https://github.com/iotaledger/identity.rs", tag = "v1.6.0-beta"}
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tower-http = { version = "0.5", features = ["fs"]}
+uuid = "1.18.1"
+rust-ipfs = "0.14.1"
+reduct-rs = "1"
+futures = "0.3"
+futures-util = "0.3"
 
 [dev-dependencies]
 anyhow = "1"
