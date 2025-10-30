@@ -1,7 +1,7 @@
 [package]
 name = "api"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 axum = "0.7"
@@ -16,6 +16,7 @@ rust-ipfs = "0.14.1"
 reduct-rs = "1"
 futures = "0.3"
 futures-util = "0.3"
+envie = "0.2.1"
 
 [dev-dependencies]
 anyhow = "1"

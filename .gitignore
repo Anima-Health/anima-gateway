@@ -1,7 +1,11 @@
 .env
 data
 node_modules
+target
+.vscode
 
-packages/contracts/out
+packages/contracts/build/
 
 packages/kernel/target
+packages/kernel/.env
+

@@ -1,66 +1,39 @@
-## Foundry
+## Contract Design Plan
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
 
-Foundry consists of:
+### AnimaAnchor — that folds in all necessary features:
+* Core anchoring: immutable registry of Merkle batch roots.
+* Witness quorum: optional M-of-N attestations without a separate contract.
+* Mirror references: optional pointers to cross-chain anchors (index only, no verification).
+* Governance: role control + simple timelock in the same contract.
+* Hash/Merkle domain allowlist and pause switch baked in.
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
 
-## Documentation
 
-https://book.getfoundry.sh/
+This will be subject to modification in the future
 
-## Usage
+Merkel Hashing off chain considerations
 
-### Build
+Witness quorum system for proof-of-data-attestation
 
-```shell
-$ forge build
-```
 
-### Test
 
-```shell
-$ forge test
-```
+## How they work together
+1. Kernel/Pod makes commit → Journal CAE (off-chain)
+2. Batcher builds Merkle root; Anchorer calls AnimaAnchor.anchorRoot → AnchorCommitted.
+3. Consent layer hashes current consent state & decision → ConsentAttestor.attest.
+If data access is granted, issue a time-boxed DataPermit for the accessor; clients show PermitIssued reference when fetching off-chain data.
+DIDRoleRegistry is used by all calls to verify the caller’s role (Anchorer, Witness, Permit Issuer, etc.).
+Any sensitive parameter/role changes are done via AnimaGovernor and are visible on-chain (plus you journal them off-chain).
 
-### Format
 
-```shell
-$ forge fmt
-```
 
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+## Considering mirroring functions
+1. Hospital creates patient records → Merkle batch
+2. Anchor on IOTA (primary blockchain)
+3. Insurance company needs proof
+4. Mirror to Ethereum
+5. Submit mirror reference pointing to Ethereum TX
+6. Patient moves to EU hospital
+7. Mirror to EU-compliant chain
+One source of truth with multiple access points
