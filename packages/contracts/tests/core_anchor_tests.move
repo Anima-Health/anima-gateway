@@ -1,18 +1,15 @@
 #[test_only]
 module contracts::core_anchor_tests {
-    use contracts::core_anchor::{Self, AnimaAnchor, ERR_NOT_ADMIN, ERR_INVALID_QUORUM, ERR_NOT_AUTHORIZED, ERR_ALREADY_ANCHORED, ERR_EMPTY_META_URI, ERR_NOT_ANCHORED, ERR_ALREADY_WITNESSED};
+    use contracts::core_anchor::{Self, AnimaAnchor, ERR_INVALID_QUORUM, ERR_ALREADY_ANCHORED, ERR_EMPTY_META_URI, ERR_NOT_ANCHORED, ERR_ALREADY_WITNESSED};
     use iota::test_scenario::{Self as ts};
     use iota::clock;
     use std::string;
-
-    // CONSTANTS 
+    
+    // Test constants - values aligned with test_utils conventions
     const ADMIN: address = @0xAD;
     const ALICE: address = @0xB1;
     const BOB: address = @0xB2;
     const CHARLIE: address = @0xB3;
-    
-    // Role constants
-    // const ROLE_ADMIN: u8 = 1;
     const ROLE_ANCHORER: u8 = 2;
     const ROLE_WITNESS: u8 = 3;
 
@@ -125,7 +122,7 @@ module contracts::core_anchor_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = ERR_NOT_ADMIN)]
+    #[expected_failure(abort_code = 1)]
     /// Test that non-admin cannot grant roles
     fun test_grant_role_fails_for_non_admin() {
         let mut scenario = ts::begin(ADMIN);
@@ -211,7 +208,7 @@ module contracts::core_anchor_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = ERR_NOT_ADMIN)]
+    #[expected_failure(abort_code = 1)]
     // Test non-admin cannot revoke roles
     fun test_revoke_role_fails_for_non_admin() {
         let mut scenario = ts::begin(ADMIN);
@@ -295,7 +292,7 @@ module contracts::core_anchor_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = ERR_NOT_ADMIN)]
+    #[expected_failure(abort_code = 1)]
     // Test non-admin cannot update quorum
     fun test_update_quorum_fails_for_non_admin() {
         let mut scenario = ts::begin(ADMIN);
@@ -416,7 +413,7 @@ module contracts::core_anchor_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = ERR_NOT_AUTHORIZED)]
+    #[expected_failure(abort_code = 2)]
     // Test that non-anchorer cannot anchor roots
     fun test_anchor_root_fails_for_non_anchorer() {
         let mut scenario = ts::begin(ADMIN);
@@ -666,7 +663,7 @@ module contracts::core_anchor_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = ERR_NOT_AUTHORIZED)]
+    #[expected_failure(abort_code = 2)]
     // Test non-witness cannot attest
     fun test_witness_attest_fails_for_non_witness() {
         let mut scenario = ts::begin(ADMIN);
@@ -759,7 +756,7 @@ module contracts::core_anchor_tests {
         
         ts::next_tx(&mut scenario, BOB);
         
-        // BOB tries to witness a non-existent anchor (should fail)
+        // BOB tries to witness a non-existent anchor - expect to fail
         {
             let mut registry = ts::take_shared<AnimaAnchor>(&scenario);
             let ctx = ts::ctx(&mut scenario);

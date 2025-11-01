@@ -5,9 +5,9 @@ module contracts::core_anchor {
     use iota::table::{Self, Table};
     use iota::vec_map::{Self, VecMap};
     use iota::clock::{Self, Clock};
+    use contracts::access_control::{Self, AccessControl};
 
     // ==================== Error Codes ====================
-    // Need to consider moving this in to a seperate util module
     const ERR_NOT_AUTHORIZED: u64 = 1;
     const ERR_ALREADY_ANCHORED: u64 = 2;
     const ERR_NOT_ANCHORED: u64 = 3;
@@ -15,13 +15,6 @@ module contracts::core_anchor {
     const ERR_EMPTY_META_URI: u64 = 5;
     const ERR_INVALID_QUORUM: u64 = 6;
     const ERR_NOT_ADMIN: u64 = 7;
-
-    // ==================== Role Constants ====================
-    // By the default the contract is initialized with the admin role.
-    // Need to consider typing this address to a multi-sig address in the future.
-    const ROLE_ADMIN: u8 = 1;
-    const ROLE_ANCHORER: u8 = 2;
-    const ROLE_WITNESS: u8 = 3;
 
 
     // ==================== Structs ====================
@@ -53,10 +46,9 @@ module contracts::core_anchor {
         id: iota::object::UID,
         // Map: hash(rootHash + algoId) -> AnchorRecord
         anchors: Table<vector<u8>, AnchorRecord>,
-        // Access control: address -> role bitmap
-        roles: Table<address, u8>,
+        // Access control component
+        access: AccessControl,
         witness_quorum: u64,
-        admin: address,
         // Pagination support
         anchor_list: vector<vector<u8>>, // Ordered list of anchor keys
     }
@@ -92,18 +84,6 @@ module contracts::core_anchor {
         timestamp: u64,
     }
 
-    public struct RoleGranted has copy, drop {
-        account: address,
-        role: u8,
-        timestamp: u64,
-    }
-
-    public struct RoleRevoked has copy, drop {
-        account: address,
-        role: u8,
-        timestamp: u64,
-    }
-
     public struct QuorumUpdated has copy, drop {
         old_quorum: u64,
         new_quorum: u64,
@@ -114,78 +94,51 @@ module contracts::core_anchor {
     
     //  Initialize the AnimaAnchor registry
     fun init(ctx: &mut iota::tx_context::TxContext) {
-        // Gets the admin addr from the tx context
         let admin = iota::tx_context::sender(ctx);
 
-        let mut registry = AnimaAnchor {
+        let registry = AnimaAnchor {
             id: iota::object::new(ctx),
             anchors: table::new(ctx),
-            roles: table::new(ctx),
+            access: access_control::new(admin, ctx),
             witness_quorum: 3, // Default quorum
-            admin,
             anchor_list: vector::empty(),
         };
-        
-        // Grant admin all roles
-        table::add(&mut registry.roles, admin, ROLE_ADMIN | ROLE_ANCHORER | ROLE_WITNESS);
         
         iota::transfer::share_object(registry);
     }
 
     // ==================== Access Control ====================
     
-    //  Check if an address has a specific role
-    fun has_role(registry: &AnimaAnchor, account: address, role: u8): bool {
-        if (!table::contains(&registry.roles, account)) {
-            return false
-        };
-        let roles = *table::borrow(&registry.roles, account);
-        (roles & role) != 0
-    }
-
-    //  Grant a role to an account (admin only)
+    //  Grant a role to an account
     public fun grant_role(
         registry: &mut AnimaAnchor,
         account: address,
         role: u8,
         clock: &Clock,
-        ctx: &mut iota::tx_context::TxContext
+        ctx: &iota::tx_context::TxContext
     ) {
-        assert!(iota::tx_context::sender(ctx) == registry.admin, ERR_NOT_ADMIN);
-        
-        if (!table::contains(&registry.roles, account)) {
-            table::add(&mut registry.roles, account, role);
-        } else {
-            let current_roles = table::borrow_mut(&mut registry.roles, account);
-            *current_roles = *current_roles | role;
-        };
-        
-        event::emit(RoleGranted {
-            account,
-            role,
-            timestamp: clock::timestamp_ms(clock),
-        });
+        access_control::grant_role(&mut registry.access, account, role, clock, ctx);
     }
 
-    //  Revoke a role from an account (admin only)
+    //  Revoke a role from an account
     public fun revoke_role(
         registry: &mut AnimaAnchor,
         account: address,
         role: u8,
         clock: &Clock,
-        ctx: &mut iota::tx_context::TxContext
+        ctx: &iota::tx_context::TxContext
     ) {
-        assert!(iota::tx_context::sender(ctx) == registry.admin, ERR_NOT_ADMIN);
-        assert!(table::contains(&registry.roles, account), ERR_NOT_AUTHORIZED);
-        
-        let current_roles = table::borrow_mut(&mut registry.roles, account);
-        *current_roles = *current_roles & (0xFF ^ role);
-        
-        event::emit(RoleRevoked {
-            account,
-            role,
-            timestamp: clock::timestamp_ms(clock),
-        });
+        access_control::revoke_role(&mut registry.access, account, role, clock, ctx);
+    }
+
+    //  Transfer admin to new address
+    public fun transfer_admin(
+        registry: &mut AnimaAnchor,
+        new_admin: address,
+        clock: &Clock,
+        ctx: &iota::tx_context::TxContext
+    ) {
+        access_control::transfer_admin(&mut registry.access, new_admin, clock, ctx);
     }
 
     //  Update witness quorum threshold (admin only)
@@ -195,7 +148,7 @@ module contracts::core_anchor {
         clock: &Clock,
         ctx: &mut iota::tx_context::TxContext
     ) {
-        assert!(iota::tx_context::sender(ctx) == registry.admin, ERR_NOT_ADMIN);
+        access_control::require_admin(&registry.access, ctx);
         assert!(new_quorum > 0, ERR_INVALID_QUORUM);
         
         let old_quorum = registry.witness_quorum;
@@ -229,7 +182,7 @@ module contracts::core_anchor {
     ) {
         let sender = iota::tx_context::sender(ctx);
         
-        assert!(has_role(registry, sender, ROLE_ANCHORER), ERR_NOT_AUTHORIZED);
+        access_control::require_role(&registry.access, sender, access_control::role_anchorer());
         assert!(*std::string::as_bytes(&meta_uri) != &vector::empty(), ERR_EMPTY_META_URI);
         
         // Generate unique key
@@ -299,7 +252,7 @@ module contracts::core_anchor {
     ) {
         let sender = iota::tx_context::sender(ctx);
         
-        assert!(has_role(registry, sender, ROLE_WITNESS), ERR_NOT_AUTHORIZED);
+        access_control::require_role(&registry.access, sender, access_control::role_witness());
         
         // Get anchor record
         let key = make_anchor_key(&root_hash, &algo_id);
@@ -347,9 +300,10 @@ module contracts::core_anchor {
     ) {
         let sender = iota::tx_context::sender(ctx);
 
+        // Allow anchorers or witnesses to submit mirrors
         assert!(
-            has_role(registry, sender, ROLE_ANCHORER) || 
-            has_role(registry, sender, ROLE_WITNESS),
+            access_control::has_role(&registry.access, sender, access_control::role_anchorer()) || 
+            access_control::has_role(&registry.access, sender, access_control::role_witness()),
             ERR_NOT_AUTHORIZED
         );
         
