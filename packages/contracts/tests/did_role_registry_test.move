@@ -425,7 +425,7 @@ module contracts::did_role_registry_test {
     }
 
     #[test]
-    //  Test granting multiple roles to same account
+    //  Test granting multiple roles to same account - should pass 
     fun test_grant_multiple_roles() {
         let admin = test_utils::admin();
         let alice = test_utils::alice();
@@ -512,7 +512,7 @@ module contracts::did_role_registry_test {
         
         ts::next_tx(&mut scenario, alice); // Switch to non-admin
         
-        // Try to grant role as non-admin (should fail)
+        // Try to grant role as non-admin
         {
             let mut registry = ts::take_shared<DIDRoleRegistry>(&scenario);
             let ctx = ts::ctx(&mut scenario);

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = "0.7"
+axum = { version = "0.7", features = ["macros"] }
 axum-extra = { version = "0.9", features = ["cookie"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "time", "sync"] }
 identity_iota = { git = "https://github.com/iotaledger/identity.rs", tag = "v1.6.0-beta"}

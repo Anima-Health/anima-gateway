@@ -13,6 +13,7 @@ pub struct Patient {
     pub name: String,
 }
 
+#[derive(Deserialize)]
 pub struct PatientForCreate {
     pub name: String,
 }
@@ -46,11 +47,11 @@ impl ModelController {
         Ok(patient)
     }
 
-    // pub async fn delete_patient(&self, id: u64) -> Result<Patient> {
-    //     let mut store = self.patient_store.lock().unwrap();
+    pub async fn delete_patient(&self, id: u64) -> Result<Patient> {
+        let mut store = self.patient_store.lock().unwrap();
 
-    //     let patient = store.get_mut(id as usize).and_then(|t| t.take());
+        let patient = store.get_mut(id as usize).and_then(|t| t.take());
 
-    //     Ok()
-    // }
+        patient.ok_or(Error::PatientDeleteFailNotFound { id })
+    }
 }
