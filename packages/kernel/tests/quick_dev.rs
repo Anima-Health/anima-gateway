@@ -22,5 +22,20 @@ async fn quick_dev() -> Result<()> {
 
     req_login.await?.print().await?;
 
+    let req_create_patient = hc.do_post(
+        "/api/patient",
+        json!({
+            "name": "John Doe",
+        }),
+    );
+
+    req_create_patient.await?.print().await?;
+
+    // let req_delete_patient = hc.do_delete(
+    //     "/api/patient/1",
+    // );
+
+    // req_delete_patient.await?.print().await?;
+
     Ok(())
 }

@@ -17,6 +17,7 @@ use std::time::{Duration, SystemTime};
 use tokio;
 use envie::Envie;
 use std::sync::Arc;
+use axum::body::Body;
 
 
 pub use self::error::{Error, Result};
@@ -26,17 +27,23 @@ mod web;
 mod model;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
+
+    let mc = model::ModelController::new().await?;
     // Load environment variables
     let mut env = Envie::load().expect("Failed to load .env file");
 
     let port = env.get_int("PORT").unwrap_or(8080);
     let db_token = env.get("REDUCT_TOKEN").expect("TOKEN is not set");
 
+    let routes_apis = web::routes_patient::routes(mc)
+        .route_layer(middleware::from_fn(web::mw_auth::mw_require_auth::<Body>));
+
     // build our application with a single route
     let routes_all = Router::new()
         .merge(routes_hello())
         .merge(web::routes_login::routes())
+        .nest("/api", routes_apis)
         .layer(middleware::map_response(main_response_mapper))
         // .layer(CookieManagerLayer::new())
         .fallback_service(routes_static());
@@ -51,10 +58,10 @@ async fn main() {
     }
 
     // Initialize the Reduct client
-    let client = ReductClient::builder()
-        .url("http://127.0.0.1:8383")
-        .api_token(&db_token.to_string())
-        .build();
+    // let client = ReductClient::builder()
+    //     .url("http://127.0.0.1:8383")
+    //     .api_token(&db_token.to_string())
+    //     .build();
 
     // let store = model::ModelController::new(Arc::new(client));
 
@@ -86,4 +93,6 @@ async fn main() {
     axum::serve(listener, routes_all)
         .await
         .unwrap();
+
+    Ok(())
 }

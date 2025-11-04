@@ -17,6 +17,7 @@ reduct-rs = "1"
 futures = "0.3"
 futures-util = "0.3"
 envie = "0.2.1"
+lazy-regex = "2"
 
 [dev-dependencies]
 anyhow = "1"
