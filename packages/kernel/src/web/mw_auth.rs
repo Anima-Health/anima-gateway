@@ -1,29 +1,76 @@
+use axum::{RequestPartsExt, async_trait};
 use axum::body::Body;
+use axum::extract::{FromRequestParts, State};
+use axum::http::request::Parts;
 use axum::middleware::Next;
-use axum_extra::extract::cookie::CookieJar;
+use axum_extra::extract::cookie::{CookieJar, Cookie};
+use crate::ctx::Ctx;
+use crate::model::ModelController;
 use crate::web::AUTH_TOKEN;
 use crate::{Error, Result};
 use axum::http::{Request, Response};
 
 pub async  fn mw_require_auth<B>(
-    cookies: CookieJar,
+    ctx: Result<Ctx>,
     req: Request<Body>,
     next: Next,
 ) -> Result<Response<Body>>{
     println!("->> {:<12} - mw_require_auth", "MIDDLEWARE");
 
-    let auth_token = cookies.get(AUTH_TOKEN).map(|c| c.value().to_string());
-
-    // Todo: Verify the auth token
-    // Use format `user-[user-id].[exp].[signature]` to verify the token
-    // Returns (user-id, exp, signature) if successful
-    let (user_id, exp, signature) = parse_token(auth_token.unwrap())?;
+    ctx?;
     
     // auth_token.ok_or(Error::AuthFailNoAuthTokenCookie)?;
     
     Ok(next.run(req).await)
     
 }
+
+pub async fn mw_ctx_resolver<B>(
+    State(_mc): State<ModelController>,
+    cookies: CookieJar,
+    mut req: Request<Body>,
+    next: Next,
+) -> Result<Response<Body>> {
+    println!("->> {:<12} - mw_ctx_resolver", "MIDDLEWARE");
+
+    let auth_token = cookies.get(AUTH_TOKEN).map(|c| c.value().to_string());
+
+    let result_ctx = match auth_token 
+        .ok_or(Error::AuthFailNoAuthTokenCookie)
+        .and_then(parse_token)
+    {
+        Ok((user_id, _exp, _sign)) => {
+            Ok(Ctx::new(user_id))
+        }
+        Err(e) => Err(e),
+    };
+
+    if result_ctx.is_err() && !matches!(result_ctx, Err(Error::AuthFailNoAuthTokenCookie)) {
+        let _cookies = cookies.remove(Cookie::from(AUTH_TOKEN));
+    }
+
+    req.extensions_mut().insert(result_ctx);
+
+    Ok(next.run(req).await)
+}
+
+
+// Implementing Ctx as extractor
+#[async_trait]
+impl<S: Send + Sync> FromRequestParts<S> for Ctx {
+    type Rejection = Error;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self> {
+        println!("->> {:<12} - Ctx", "EXTRACTOR");
+
+        parts
+            .extensions
+            .get::<Result<Ctx>>().ok_or(Error::AuthFailCtxNotInRequestExt)?
+            .clone()
+
+    }
+}
+
 
 fn parse_token(token: String) -> Result<(u64, String, String)> {
 

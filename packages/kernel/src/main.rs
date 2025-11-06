@@ -1,12 +1,8 @@
 use axum::{
-    routing::{get, get_service},
-    Router,
-    response::Html,
-    response::IntoResponse,
-    extract::Query,
-    response::Response,
-    middleware,
+    Json, Router, extract::{Query, Request}, http::{Uri, Method}, middleware::{self, Next}, response::{Html, IntoResponse, Response}, routing::{get, get_service}
 };
+use tower_cookies::service;
+use uuid::Uuid;
 use std::net::SocketAddr;
 use serde::Deserialize;
 use tower_http::services::ServeDir;
@@ -18,13 +14,17 @@ use tokio;
 use envie::Envie;
 use std::sync::Arc;
 use axum::body::Body;
+use serde_json::{Value, json};
 
+use crate::{ctx::Ctx, log::log_request};
 
 pub use self::error::{Error, Result};
 
 mod error;
 mod web;
 mod model;
+mod ctx;
+mod log;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
     let port = env.get_int("PORT").unwrap_or(8080);
     let db_token = env.get("REDUCT_TOKEN").expect("TOKEN is not set");
 
-    let routes_apis = web::routes_patient::routes(mc)
+    let routes_apis = web::routes_patient::routes(mc.clone())
         .route_layer(middleware::from_fn(web::mw_auth::mw_require_auth::<Body>));
 
     // build our application with a single route
@@ -44,7 +44,11 @@ async fn main() -> Result<()> {
         .merge(routes_hello())
         .merge(web::routes_login::routes())
         .nest("/api", routes_apis)
-        .layer(middleware::map_response(main_response_mapper))
+        .layer(middleware::from_fn(main_response_mapper))
+        .layer(middleware::from_fn_with_state(
+            mc,
+            web::mw_auth::mw_ctx_resolver::<Body>
+        ))
         // .layer(CookieManagerLayer::new())
         .fallback_service(routes_static());
 
@@ -66,11 +70,48 @@ async fn main() -> Result<()> {
     // let store = model::ModelController::new(Arc::new(client));
 
 
-    async fn main_response_mapper(res: Response) -> Response {
+    async fn main_response_mapper(
+        ctx: Option<Ctx>,
+        uri: Uri,
+        req: Request,
+        next: Next,
+    ) -> Response {
         println!("->> {:<12} - main_response_mapper", "MIDDLEWARE");
+        let uuid = Uuid::new_v4();
+        
+        let req_method = req.method().clone();
+
+        let res = next.run(req).await;
+
+        let service_error = res.extensions().get::<Error>();
+        let client_status_error = service_error.map(|se| se.client_status_and_error());
+
+
+        let error_response = client_status_error
+            .as_ref()
+            .map(|(status_code, client_error)| {
+                let client_error_body = json!({
+                    "error": {
+                        "type": client_error.as_ref(),
+                        "req_uuid": uuid.to_string(),
+                    }
+                });
+                println!("     ->> client_error_body: {client_error_body}");
+                
+                
+                (*status_code, Json(client_error_body)).into_response()
+                
+            });
+            
+            
+            
+        let client_error = client_status_error.unzip().1;
+        let _ = log_request(uuid, req_method.to_string(), uri, ctx, service_error, client_error).await;
+
+
 
         println!();
-        res
+        error_response.unwrap_or(res)
     }
 
     #[derive(Debug, Deserialize)]

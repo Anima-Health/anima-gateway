@@ -1,7 +1,7 @@
 
 
 
-use crate::{Error, Result};
+use crate::{Error, Result, ctx::Ctx};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 // use reduct_rs::ReductClient;s
@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Clone, Debug, Serialize)]
 pub struct Patient {
     pub id: u64,
+    pub cid: u64,
     pub name: String,
 }
 
@@ -32,13 +33,14 @@ impl ModelController {
 }
 
 impl ModelController {
-    pub async fn create_patient(&self, patient: PatientForCreate) -> Result<Patient> {
+    pub async fn create_patient(&self, ctx: Ctx, patient: PatientForCreate) -> Result<Patient> {
 
         let mut store = self.patient_store.lock().unwrap();
 
         let id = store.len() as u64 + 1;
         let patient = Patient {
             id,
+            cid: ctx.user_id(),
             name: patient.name,
         };
 
@@ -47,7 +49,7 @@ impl ModelController {
         Ok(patient)
     }
 
-    pub async fn delete_patient(&self, id: u64) -> Result<Patient> {
+    pub async fn delete_patient(&self, _ctx: Ctx, id: u64) -> Result<Patient> {
         let mut store = self.patient_store.lock().unwrap();
 
         let patient = store.get_mut(id as usize).and_then(|t| t.take());
