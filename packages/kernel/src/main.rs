@@ -36,14 +36,14 @@ async fn main() -> Result<()> {
     let port = env.get_int("PORT").unwrap_or(8080);
     let db_token = env.get("REDUCT_TOKEN").expect("TOKEN is not set");
 
-    let routes_apis = web::routes_patient::routes(mc.clone())
-        .route_layer(middleware::from_fn(web::mw_auth::mw_require_auth::<Body>));
+    // let routes_apis = web::routes_patient::routes(mc.clone())
+    //     .route_layer(middleware::from_fn(web::mw_auth::mw_require_auth::<Body>));
 
     // build our application with a single route
     let routes_all = Router::new()
-        .merge(routes_hello())
+        // .merge(routes_hello())
         .merge(web::routes_login::routes())
-        .nest("/api", routes_apis)
+        // .nest("/api", routes_apis)
         .layer(middleware::from_fn(main_response_mapper))
         .layer(middleware::from_fn_with_state(
             mc,
@@ -52,10 +52,10 @@ async fn main() -> Result<()> {
         // .layer(CookieManagerLayer::new())
         .fallback_service(routes_static());
 
-    fn routes_hello() -> Router {
-        Router::new()
-            .route("/hello", get(handler_hello))
-    }
+    // fn routes_hello() -> Router {
+    //     Router::new()
+    //         .route("/hello", get(handler_hello))
+    // }
 
     fn routes_static() -> Router {
         Router::new().nest_service("/", get_service(ServeDir::new("./")))

@@ -1,19 +1,10 @@
 use serde::Serialize;
 
-use crate::model;
-
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, Serialize)]
 pub enum Error {
-
-    Model(model::Error),
-}
-
-impl From<model::Error> for Error {
-    fn from(val: model::Error) -> Self {
-        Self::Model(val)
-    }
+    CtxCannotNewRootCtx,
 }
 
 impl core::fmt::Display for Error {
