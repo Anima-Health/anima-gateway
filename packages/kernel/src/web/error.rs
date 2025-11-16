@@ -4,6 +4,8 @@ use axum::{
     response::Response,
 };
 use serde::Serialize;
+use crate::web;
+use crate::model;
 
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -12,8 +14,11 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[serde(tag = "type", content = "data")]
 pub enum Error { 
     LoginFail,
+    AuthFail(String),
 
+    CtxExt(web::mw_auth::CtxExtError),
     
+    Model(model::Error),
 }
 
 impl IntoResponse for Error {
@@ -21,7 +26,6 @@ impl IntoResponse for Error {
         println!("->> {:<12} - {self:?}", "INTO_RESPONSE");
 
         let mut response = StatusCode::INTERNAL_SERVER_ERROR.into_response();
-
         response.extensions_mut().insert(self);
 
         response
@@ -40,16 +44,24 @@ impl std::error::Error for Error {}
 
 impl Error {
     pub fn client_status_and_error(&self) -> (StatusCode, ClientError) {
+
+        use web::Error::*;
+
         #[allow(unreachable_patterns)]
         match self {
-            Self::LoginFail => (StatusCode::FORBIDDEN, ClientError::LOGIN_FAIL),
+            LoginFail | AuthFail(_) => (StatusCode::UNAUTHORIZED, ClientError::LOGIN_FAIL),
+            
+            CtxExt(_) => (StatusCode::FORBIDDEN, ClientError::NO_AUTH),
+            
+            Model(model::Error::PatientNotFound { .. }) => (
+                StatusCode::NOT_FOUND,
+                ClientError::ENTITY_NOT_FOUND
+            ),
 
-            Self::AuthFailNoAuthTokenCookie
-            | Self::AuthFailInvalidTokenFormat
-            | Self::AuthFailCtxNotInRequestExt => (StatusCode::FORBIDDEN, ClientError::NO_AUTH),
-
-            Self::PatientDeleteFailNotFound { .. } => (StatusCode::NOT_FOUND, ClientError::INVALID_PARAMS),
-            _ => (StatusCode::INTERNAL_SERVER_ERROR, ClientError::SERVICE_ERROR),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR, 
+                ClientError::SERVICE_ERROR
+            ),
         }
     }
 }
@@ -59,5 +71,6 @@ impl Error {
 pub enum ClientError {
     LOGIN_FAIL,
     NO_AUTH,
+    ENTITY_NOT_FOUND,
     SERVICE_ERROR,
 }

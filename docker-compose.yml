@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # ReductStore - Time-series database for patient data
+  reductstore:
+    image: reduct/store:latest
+    container_name: anima-reductstore
+    ports:
+      - "8383:8383"
+    volumes:
+      - reduct-data:/data
+    environment:
+      - RS_LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8383/api/v1/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - anima-network
+
+  # Kernel API - Main application server
+  kernel-api:
+    build:
+      context: ./packages/kernel
+      dockerfile: Dockerfile
+    container_name: anima-kernel-api
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - REDUCT_TOKEN=${REDUCT_TOKEN:-}
+      - RUST_LOG=info
+      - IOTA_NODE_URL=https://api.testnet.iotaledger.net
+    volumes:
+      - ./packages/kernel/.env:/app/.env:ro
+    depends_on:
+      reductstore:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - anima-network
+    restart: unless-stopped
+
+networks:
+  anima-network:
+    driver: bridge
+
+volumes:
+  reduct-data:
+    driver: local
+

@@ -1,22 +1,17 @@
+use axum::body::Body;
 use axum::{
-    Json, Router, extract::{Query, Request}, http::{Uri, Method}, middleware::{self, Next}, response::{Html, IntoResponse, Response}, routing::{get, get_service}
+    Router,
+    middleware,
 };
-use tower_cookies::service;
-use uuid::Uuid;
+use tower_cookies::CookieManagerLayer;
 use std::net::SocketAddr;
-use serde::Deserialize;
-use tower_http::services::ServeDir;
-use futures_util::stream::StreamExt;
-use reduct_rs::{condition, QuotaType, ReductClient, ReductError};
-use std::pin::pin;
-use std::time::{Duration, SystemTime};
 use tokio;
 use envie::Envie;
-use std::sync::Arc;
-use axum::body::Body;
-use serde_json::{Value, json};
 
-use crate::{ctx::Ctx, log::log_request};
+// use crate::{ctx::Ctx, log::log_request};
+use crate::web::{mw_res_map::mw_reponse_map, routes_login, routes_patient, routes_anchor, routes_health, routes_static};
+use crate::web::mw_auth::mw_ctx_resolve;
+use crate::model::ModelManager;
 
 pub use self::error::{Error, Result};
 
@@ -25,41 +20,53 @@ mod web;
 mod model;
 mod ctx;
 mod log;
+mod auth;
+mod did_manager;
+mod ehr;
 
 #[tokio::main]
 async fn main() -> Result<()> {
 
-    let mc = model::ModelController::new().await?;
+    let mm = ModelManager::new().await?;
+    
+    // Initialize DID registry for patient DIDs
+    let did_registry = crate::did_manager::DIDRegistry::new();
+    
+    // Initialize auth system
+    let auth_state = routes_login::AuthState {
+        challenge_store: crate::auth::ChallengeStore::new(),
+        did_resolver: crate::auth::DIDResolver::new(),
+    };
+    
     // Load environment variables
-    let mut env = Envie::load().expect("Failed to load .env file");
+    let env = Envie::load().expect("Failed to load .env file");
 
     let port = env.get_int("PORT").unwrap_or(8080);
-    let db_token = env.get("REDUCT_TOKEN").expect("TOKEN is not set");
+    let _db_token = env.get("REDUCT_TOKEN").unwrap_or("".to_string());
 
-    // let routes_apis = web::routes_patient::routes(mc.clone())
-    //     .route_layer(middleware::from_fn(web::mw_auth::mw_require_auth::<Body>));
+    let routes_apis = Router::new()
+        .merge(routes_patient::routes(mm.clone(), did_registry.clone()))
+        .merge(routes_anchor::routes(mm.clone()))
+        .route_layer(middleware::from_fn(web::mw_auth::mw_ctx_require::<Body>));
 
-    // build our application with a single route
+    // Build complete application with all routes
     let routes_all = Router::new()
-        // .merge(routes_hello())
-        .merge(web::routes_login::routes())
-        // .nest("/api", routes_apis)
-        .layer(middleware::from_fn(main_response_mapper))
+        .merge(routes_health::routes())  // Health check (no auth required)
+        .merge(routes_login::routes(auth_state))
+        .nest("/api", routes_apis)
+        .layer(middleware::map_response(mw_reponse_map))
+        .layer(CookieManagerLayer::new())
         .layer(middleware::from_fn_with_state(
-            mc,
-            web::mw_auth::mw_ctx_resolver::<Body>
-        ))
-        // .layer(CookieManagerLayer::new())
-        .fallback_service(routes_static());
+                mm.clone(), mw_ctx_resolve::<Body>
+            ))
+        .fallback_service(routes_static::serve_dir());
+    
+    println!("✅ IOTA DID authentication enabled");
+    println!("✅ openEHR compositions enabled");
+    println!("✅ Merkle anchoring enabled");
+    println!("✅ ReductStore integration ready");
+    println!("✅ Welcome to Anima");
 
-    // fn routes_hello() -> Router {
-    //     Router::new()
-    //         .route("/hello", get(handler_hello))
-    // }
-
-    fn routes_static() -> Router {
-        Router::new().nest_service("/", get_service(ServeDir::new("./")))
-    }
 
     // Initialize the Reduct client
     // let client = ReductClient::builder()
@@ -69,66 +76,8 @@ async fn main() -> Result<()> {
 
     // let store = model::ModelController::new(Arc::new(client));
 
-
-    async fn main_response_mapper(
-        ctx: Option<Ctx>,
-        uri: Uri,
-        req: Request,
-        next: Next,
-    ) -> Response {
-        println!("->> {:<12} - main_response_mapper", "MIDDLEWARE");
-        let uuid = Uuid::new_v4();
-        
-        let req_method = req.method().clone();
-
-        let res = next.run(req).await;
-
-        let service_error = res.extensions().get::<Error>();
-        let client_status_error = service_error.map(|se| se.client_status_and_error());
-
-
-        let error_response = client_status_error
-            .as_ref()
-            .map(|(status_code, client_error)| {
-                let client_error_body = json!({
-                    "error": {
-                        "type": client_error.as_ref(),
-                        "req_uuid": uuid.to_string(),
-                    }
-                });
-                println!("     ->> client_error_body: {client_error_body}");
-                
-                
-                (*status_code, Json(client_error_body)).into_response()
-                
-            });
-            
-            
-            
-        let client_error = client_status_error.unzip().1;
-        let _ = log_request(uuid, req_method.to_string(), uri, ctx, service_error, client_error).await;
-
-
-
-        println!();
-        error_response.unwrap_or(res)
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct HelloParams {
-        name: Option<String>,
-    }
-
-    async fn handler_hello(Query(params): Query<HelloParams>) -> impl IntoResponse {
-        println!("->> {:<12} - handler_hello", "HANDLER");
-
-        let name = params.name.as_deref().unwrap_or("World");
-
-        Html(format!("Hello, {name}!"))
-    }
-
     // run our app with hyper, listening globally on port 3000
-    let addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
+    let addr: SocketAddr = format!("127.0.0.1:{}", port).parse().unwrap();
     println!("->> Listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, routes_all)

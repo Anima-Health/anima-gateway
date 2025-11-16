@@ -2,9 +2,12 @@ use serde::Serialize;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub enum Error {
-    // CtxCannotNewRootCtx,
+    StoreError(String),
+    PatientNotFound { id: String },
+    MerkleError(String),
+    SerializationError(String),
 }
 
 impl core::fmt::Display for Error {
