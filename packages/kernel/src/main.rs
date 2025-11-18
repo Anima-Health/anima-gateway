@@ -23,6 +23,7 @@ mod log;
 mod auth;
 mod did_manager;
 mod ehr;
+mod blockchain;
 
 #[tokio::main]
 async fn main() -> Result<()> {

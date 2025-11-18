@@ -3,9 +3,17 @@
 
 **Privacy-Preserving Healthcare Data Provenance with IOTA Blockchain**
 
-
-
 > Zero PHI on-chain | DID-based Identity | openEHR Standard | Merkle Tree Anchoring
+
+---
+
+## 🏆 IOTA Hackathon 2025 Submission
+
+**Problem:** Healthcare data is siloed, insecure, and patients have no control. $496B lost annually to data inefficiency. 133M records breached in 2023.
+
+**Solution:** Anima Health uses IOTA Move contracts + IOTA DID to provide tamper-proof, privacy-preserving healthcare records with cryptographic verification.
+
+**Status:** ✅ Fully functional | ✅ Deployed on IOTA Testnet | ✅ Frontend + Backend integrated
 
 ---
 
@@ -27,7 +35,7 @@ TBC
 
 ## 🚀 Quick Start
 
-### **Full Stack** (Backend + Frontend):
+### **Full Stack** (Backend + Frontend): (Super preferred)
 
 ```bash
 # Terminal 1: Backend API
@@ -107,7 +115,7 @@ iota move test
 ---
 
 
-## 🔐 IOTA DID Authentication
+## 🔐 IOTA DID Authentication - Experimenting with this for this hackathon
 
 ### **Challenge-Response Flow**:
 

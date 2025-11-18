@@ -1,12 +1,23 @@
 import { useState, useEffect } from 'react';
-import { User, Key, FileText, Calendar, RefreshCw, AlertCircle } from 'lucide-react';
+import { User, Key, FileText, Calendar, RefreshCw, AlertCircle, Shield, Copy } from 'lucide-react';
 import { patientService, Patient } from '@/services/patient.service';
 
-export default function PatientList() {
+interface PatientListProps {
+  onVerify: (patientId: string) => void;
+}
+
+export default function PatientList({ onVerify }: PatientListProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const loadPatients = async () => {
     setLoading(true);
@@ -183,12 +194,30 @@ export default function PatientList() {
           {patients.map((patient) => (
             <div
               key={patient.id}
-              className="card-brutal hover:translate-x-1 hover:translate-y-1 hover:shadow-brutal transition-all cursor-pointer"
-              onClick={() => setSelectedPatient(patient)}
+              className="card-brutal"
             >
               <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h3 className="text-xl font-black mb-2">{patient.demographics.name}</h3>
+                <div className="flex-1 pr-4">
+                  <h3 className="text-xl font-black mb-3">{patient.demographics.name}</h3>
+                  
+                  {/* Patient ID - Prominent Display */}
+                  <div className="mb-3 p-3 bg-gray-100 border-2 border-black">
+                    <div className="text-xs font-black uppercase text-gray-600 mb-1">PATIENT ID</div>
+                    <div className="flex items-center gap-2">
+                      <div className="font-mono text-xs break-all flex-1">{patient.id}</div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCopyId(patient.id);
+                        }}
+                        className="px-2 py-1 bg-white border-2 border-black font-bold text-xs hover:bg-gray-50"
+                        title="Copy ID"
+                      >
+                        {copiedId === patient.id ? '✓' : <Copy size={12} />}
+                      </button>
+                    </div>
+                  </div>
+                  
                   <div className="space-y-1 text-sm font-medium">
                     <div className="flex items-center gap-2">
                       <FileText size={14} />
@@ -204,11 +233,25 @@ export default function PatientList() {
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="badge-brutal mb-2">DID v{patient.did_metadata.key_version}</div>
-                  <div className="text-xs font-bold text-gray-600">
-                    {patient.composition.content.length} openEHR entries
-                  </div>
+                
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onVerify(patient.id);
+                    }}
+                    className="px-4 py-2 bg-black text-white border-4 border-black font-black text-xs uppercase hover:bg-gray-800 flex items-center gap-2 whitespace-nowrap"
+                  >
+                    <Shield size={14} />
+                    VERIFY
+                  </button>
+                  <button 
+                    onClick={() => setSelectedPatient(patient)} 
+                    className="brutal-button-sm text-xs whitespace-nowrap"
+                  >
+                    View Details
+                  </button>
+                  <div className="badge-brutal text-center text-xs">v{patient.did_metadata.key_version}</div>
                 </div>
               </div>
             </div>

@@ -3,10 +3,10 @@ import { Lock, UserCircle, AlertCircle, CheckCircle } from 'lucide-react';
 import { authService } from '@/services/auth.service';
 
 interface LoginPageProps {
-  onLogin: () => void;
+  onLoginSuccess: (did: string) => void;
 }
 
-export default function LoginPage({ onLogin }: LoginPageProps) {
+export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [did, setDid] = useState('did:iota:anima:abc123');
   const [step, setStep] = useState<'input' | 'challenge' | 'signing'>('input');
   const [loading, setLoading] = useState(false);
@@ -49,7 +49,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       
       // Small delay to show success message
       setTimeout(() => {
-        onLogin();
+        onLoginSuccess(did);
       }, 1000);
     } catch (err: any) {
       setError(err.response?.data?.error?.type || 'Authentication failed');
@@ -70,7 +70,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
           </h1>
           <div className="inline-block px-4 py-2 bg-black text-white border-4 border-black">
             <p className="font-bold uppercase text-sm tracking-wider">
-              IOTA DID AUTHENTICATION
+              IOTA DID AUTHENTICATION POC
             </p>
           </div>
         </div>
@@ -84,7 +84,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
               {step === 'signing' && 'VERIFYING...'}
             </h2>
             <p className="text-gray-600 font-medium">
-              {step === 'input' && 'No passwords. Just cryptographic proof.'}
+              {step === 'input' && 'No passwords required. Just cryptographic proof.'}
               {step === 'challenge' && 'Sign the challenge with your DID private key'}
               {step === 'signing' && 'Verifying signature against IOTA Tangle...'}
             </p>
@@ -236,8 +236,8 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         <div className="text-center mt-8">
           <p className="text-sm font-medium text-gray-600">
             Powered by <span className="font-black">IOTA</span> • 
-            <span className="font-black"> openEHR</span> • 
-            <span className="font-black"> Ed25519</span>
+            <span className="font-black"> For MOVEATHON Europe 2025</span> •
+            <span className="font-black"> By Akanimoh Osutuk</span>
           </p>
         </div>
       </div>

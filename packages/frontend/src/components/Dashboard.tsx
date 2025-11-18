@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { User, Activity, Anchor, LogOut, Plus, List } from 'lucide-react';
+import { User, Activity, Anchor, LogOut, Plus, List, Shield } from 'lucide-react';
 import PatientForm from './PatientForm';
 import PatientList from './PatientList';
 import AnchorPanel from './AnchorPanel';
+import VerifyPanel from './VerifyPanel';
 import StatsCard from './StatsCard';
 import { patientService } from '@/services/patient.service';
 import { anchorService } from '@/services/anchor.service';
@@ -12,13 +13,19 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ onLogout }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<'create' | 'list' | 'anchor'>('create');
+  const [activeTab, setActiveTab] = useState<'create' | 'list' | 'anchor' | 'verify'>('create');
   const [stats, setStats] = useState({
     totalPatients: 0,
     pendingAnchors: 0,
     totalBatches: 0,
   });
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+
+  const handleVerifyPatient = (patientId: string) => {
+    setSelectedPatientId(patientId);
+    setActiveTab('verify');
+  };
 
   // Load stats on mount and when refreshKey changes
   useEffect(() => {
@@ -137,7 +144,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           </button>
           <button
             onClick={() => setActiveTab('anchor')}
-            className={`px-6 py-3 font-black uppercase text-sm tracking-wide transition-colors ${
+            className={`px-6 py-3 font-black uppercase text-sm tracking-wide transition-colors border-r-4 border-black ${
               activeTab === 'anchor'
                 ? 'bg-black text-white'
                 : 'bg-white text-black hover:bg-gray-100'
@@ -146,13 +153,25 @@ export default function Dashboard({ onLogout }: DashboardProps) {
             <Anchor className="inline mr-2" size={16} />
             ANCHOR BATCH
           </button>
+          <button
+            onClick={() => setActiveTab('verify')}
+            className={`px-6 py-3 font-black uppercase text-sm tracking-wide transition-colors ${
+              activeTab === 'verify'
+                ? 'bg-black text-white'
+                : 'bg-white text-black hover:bg-gray-100'
+            }`}
+          >
+            <Shield className="inline mr-2" size={16} />
+            VERIFY DATA
+          </button>
         </div>
 
         {/* Tab Content */}
         <div key={refreshKey}>
           {activeTab === 'create' && <PatientForm onSuccess={handlePatientCreated} />}
-          {activeTab === 'list' && <PatientList />}
+          {activeTab === 'list' && <PatientList onVerify={handleVerifyPatient} />}
           {activeTab === 'anchor' && <AnchorPanel onAnchor={handleBatchCreated} />}
+          {activeTab === 'verify' && <VerifyPanel initialPatientId={selectedPatientId} />}
         </div>
       </div>
 

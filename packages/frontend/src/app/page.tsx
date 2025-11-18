@@ -7,12 +7,21 @@ import LoginPage from '@/components/LoginPage';
 export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  const handleLogout = () => {
+    // Just logout on frontend, backend keeps all data
+    setIsAuthenticated(false);
+  };
+
+  const handleLogin = (did: string) => {
+    setIsAuthenticated(true);
+  };
+
   return (
     <main className="min-h-screen bg-white">
       {isAuthenticated ? (
-        <Dashboard onLogout={() => setIsAuthenticated(false)} />
+        <Dashboard onLogout={handleLogout} />
       ) : (
-        <LoginPage onLogin={() => setIsAuthenticated(true)} />
+        <LoginPage onLoginSuccess={handleLogin} />
       )}
     </main>
   );

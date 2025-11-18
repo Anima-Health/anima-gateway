@@ -45,3 +45,11 @@ dependencies = [
 compiler-version = "1.8.0-rc"
 edition = "2024"
 flavor = "iota"
+
+[env]
+
+[env.testnet]
+chain-id = "2304aa97"
+original-published-id = "0xa79a18c3b241a6c4e07a867f4a0d91c72da9b993af9d304ea44e1c6efb1bb21b"
+latest-published-id = "0xa79a18c3b241a6c4e07a867f4a0d91c72da9b993af9d304ea44e1c6efb1bb21b"
+published-version = "1"

@@ -12,13 +12,34 @@ pub struct MerkleRoot {
 
 pub struct MerkleTree {
     leaves: Vec<Vec<u8>>,
+    // Store patient IDs for proof generation
+    leaf_ids: Vec<String>,
+}
+
+/// Merkle proof for verifying a leaf is in the tree
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MerkleProof {
+    pub leaf_hash: String,
+    pub leaf_index: usize,
+    pub proof_hashes: Vec<String>,
+    pub root_hash: String,
+    pub patient_id: String,
 }
 
 impl MerkleTree {
     pub fn new() -> Self {
         Self {
             leaves: Vec::new(),
+            leaf_ids: Vec::new(),
         }
+    }
+
+    /// Add a data item to the tree with patient ID (will be hashed)
+    pub fn add_leaf_with_id(&mut self, data: &[u8], patient_id: String) {
+        let mut hasher = Sha256::new();
+        hasher.update(data);
+        self.leaves.push(hasher.finalize().to_vec());
+        self.leaf_ids.push(patient_id);
     }
 
     /// Add a data item to the tree (will be hashed)
@@ -26,6 +47,7 @@ impl MerkleTree {
         let mut hasher = Sha256::new();
         hasher.update(data);
         self.leaves.push(hasher.finalize().to_vec());
+        self.leaf_ids.push(String::new()); // Empty ID for backwards compat
     }
 
     /// Add an already-hashed leaf
@@ -72,7 +94,100 @@ impl MerkleTree {
     /// Clear all leaves
     pub fn clear(&mut self) {
         self.leaves.clear();
+        self.leaf_ids.clear();
     }
+    
+    /// Generate a Merkle proof for a specific leaf index
+    pub fn generate_proof(&self, leaf_index: usize) -> Option<MerkleProof> {
+        if leaf_index >= self.leaves.len() {
+            return None;
+        }
+
+        let root = self.root()?;
+        let mut proof_hashes = Vec::new();
+        let mut level = self.leaves.clone();
+        let mut index = leaf_index;
+
+        // Build proof by collecting sibling hashes at each level
+        while level.len() > 1 {
+            let mut next_level = Vec::new();
+            
+            for (i, chunk) in level.chunks(2).enumerate() {
+                if i * 2 == index || i * 2 + 1 == index {
+                    // This chunk contains our target, save the sibling
+                    if chunk.len() == 2 {
+                        if index % 2 == 0 {
+                            // We're the left node, save right sibling
+                            proof_hashes.push(hash_to_hex(&chunk[1]));
+                        } else {
+                            // We're the right node, save left sibling
+                            proof_hashes.push(hash_to_hex(&chunk[0]));
+                        }
+                    } else {
+                        // Odd node, duplicated
+                        proof_hashes.push(hash_to_hex(&chunk[0]));
+                    }
+                }
+
+                // Compute next level hash
+                let mut hasher = Sha256::new();
+                hasher.update(&chunk[0]);
+                if chunk.len() == 2 {
+                    hasher.update(&chunk[1]);
+                } else {
+                    hasher.update(&chunk[0]);
+                }
+                next_level.push(hasher.finalize().to_vec());
+            }
+
+            level = next_level;
+            index /= 2;
+        }
+
+        Some(MerkleProof {
+            leaf_hash: hash_to_hex(&self.leaves[leaf_index]),
+            leaf_index,
+            proof_hashes,
+            root_hash: hash_to_hex(&root),
+            patient_id: self.leaf_ids.get(leaf_index).cloned().unwrap_or_default(),
+        })
+    }
+    
+    /// Get all leaves (for reconstruction)
+    pub fn get_leaves(&self) -> &[Vec<u8>] {
+        &self.leaves
+    }
+    
+    /// Get leaf IDs
+    pub fn get_leaf_ids(&self) -> &[String] {
+        &self.leaf_ids
+    }
+}
+
+/// Verify a Merkle proof
+pub fn verify_proof(proof: &MerkleProof) -> bool {
+    let mut current_hash = hex::decode(&proof.leaf_hash).unwrap();
+    let mut index = proof.leaf_index;
+    
+    for sibling_hex in &proof.proof_hashes {
+        let sibling = hex::decode(sibling_hex).unwrap();
+        let mut hasher = Sha256::new();
+        
+        if index % 2 == 0 {
+            // We're left, sibling is right
+            hasher.update(&current_hash);
+            hasher.update(&sibling);
+        } else {
+            // We're right, sibling is left
+            hasher.update(&sibling);
+            hasher.update(&current_hash);
+        }
+        
+        current_hash = hasher.finalize().to_vec();
+        index /= 2;
+    }
+    
+    hash_to_hex(&current_hash) == proof.root_hash
 }
 
 /// Hash a single piece of data with SHA256
